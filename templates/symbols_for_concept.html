@@ -1,0 +1,219 @@
+
+{% block content %}
+
+<title> Symbols </title>
+ <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.0/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script> 
+<script src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.8/angular.min.js"></script>
+<link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/style.css') }}">
+<link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/overviewPage.css') }}">
+
+
+<link rel="stylesheet" type="text/css" href="{{ url_for('static',filename='css/loader.css') }}">
+
+</head>
+
+<body>
+
+
+  <div align="center">
+    <br>
+    <div class="fixed-top" id="topWrap">
+      <a class="navbar-brand" href="/">Home</a>
+     
+        <h2  id="topMiddleWrap"> Symbols for:  <b>  {{ concept }} </b> 
+          <span id="find_symbol_btn" class="find_symbol_button" onclick="go_to_finder()">Find more symbols! </span>
+        </h2>
+       
+ 
+      <h6></h6>
+    </div>
+    
+  
+    <hr>
+    <div style="display:block" id="loader" class="loader"></div>
+    <div id="symbol_grid"></div>
+  </div>
+
+  <script>
+    var child_example;
+
+    var concept = '{{ concept }}'
+    var username = '{{ username }}'
+
+
+    function go_to_finder() {
+      $('#loader').attr("style", "display:block")
+      window.location.href = '/' + username + '/' + concept + '/' + 'phase_1' + '/finder' ;
+
+    }
+
+
+    function go_to_finder_for_child_term(node_path) {
+      $('#loader').attr("style", "display:block")
+      window.location.href = '/' + username + '/' + concept + '/' + node_path + '/finder' ;
+    }
+
+    var concept_dict = null;
+    var save_img_dict_ex;
+    var imageTotal = 0;
+    var clusterTotal = 0;
+    var termTotal = 0; 
+    var cluster_imageTotal = 0;
+    var cluster_termTotal = 0;
+
+    window.onload = function () {
+      // load past concepts
+
+      $.ajax({
+        type: "POST",
+        url: "/get_tree_view_json",
+        dataType: "json",
+        contentType: "application/json; charset=utf-8",
+        data: JSON.stringify({ "username": username, "concept": concept }),
+        success: function (result) {
+          $('#loader').attr("style", "display:none")
+          let tree_view_json = JSON.parse(result);
+
+          
+
+          if (tree_view_json.hasOwnProperty("children")) {
+            let tree_view_json_children = tree_view_json.children;
+            $('#symbol_grid').append($('<h2 class = "summaryTitle"><span id = "termTotal">0 unique term</span> <span class="unbold"> from <span id = "clusterTotal">0 cluster,</span> <span id = "imageTotal">0 image</span>  in total</h2> </span>'));
+            populate_clusters_images(tree_view_json_children); //pass as an argument as an array of children, (all the clusters obj) 
+
+            count_cluster_total(tree_view_json_children);
+          }
+
+
+        },
+        error: function (request, status, error) {
+          console.log("Error");
+          console.log(request)
+          console.log(status)
+          console.log(error)
+        }
+      });
+
+      populate_clusters_images = function (clusters_obj) {
+
+        for (let i = 0; i < clusters_obj.length; i++) {
+          
+          //reset counts
+          cluster_imageTotal = 0; 
+          cluster_termTotal = 0; 
+
+          $('#symbol_grid')
+            .append($('<div>' + '<h3 class="clusterTitle">' + clusters_obj[i].title + '<span class="clusterInfo"> [<span id = "'+ clusters_obj[i].key + 'termTotal">0 term </span>, <span id = "'+ clusters_obj[i].key + 'imageTotal">0 image</span>] </span></h3>' + '</div>')
+              .attr({ "id": clusters_obj[i].key, "class": "clusterDiv fluid-container" })
+            );
+
+          $('#'+clusters_obj[i].key).hide();
+
+          let clusterHasImage = false;
+          append_term_images_to_cluster(clusters_obj[i].children, clusters_obj[i].key);
+
+        }
+      }
+
+
+      append_term_images_to_cluster = function (children, cluster_key) {
+
+        for (let i = 0; i < children.length; i++) {
+          
+          if (children[i].data.hasOwnProperty("saved_img")) {
+            if (!isObjEmpty(children[i].data.saved_img)) {
+              
+              append_term_to_cluster(children[i], cluster_key)
+
+              cluster_termTotal++
+              termTotal++;
+
+
+              if(cluster_termTotal>0 ? $('#' + cluster_key + 'termTotal').text(cluster_termTotal + " terms") :  $('#' + cluster_key + 'termTotal').text(cluster_termTotal + " term") );
+
+              if(termTotal>0 ? $('#termTotal').text(termTotal + "/20 unique terms ") :  $('#termTotal').text(termTotal + "/20 term ") );
+             
+              $('#'+cluster_key).show();
+              clusterHasImage = true;
+
+            }
+          }
+
+          //  recursive
+          if (children[i].hasOwnProperty("children")) {
+            append_term_images_to_cluster(children[i].children, cluster_key);
+          }
+        }
+      }
+      append_term_to_cluster = function (child, cluster_key) {
+        child_example = child;
+
+        var saved_image_url = Object.keys(child.data.saved_img)[0];
+        var unique_tree_path = child.data.saved_img[saved_image_url].tree_path_ids;
+
+        // Fix JQuery slash issue
+        unique_tree_path = unique_tree_path.replace(/\//g, "-");
+        
+        $('#' + cluster_key).append($('<div id=' + unique_tree_path + ' class="termDiv"> ' + 
+          '<h4  class="cluster_child_term"> <span class="pointer" onclick="go_to_finder_for_child_term(\''+unique_tree_path+'\')" >' + child.title + ' (' + Object.keys(child.data.saved_img).length + ') </span> </h4> <div id=' + unique_tree_path + 'image_row class="imageRow"> </div> </div>'))
+
+        // update cluster_imageTotal & imageTotal
+        cluster_imageTotal += Object.keys(child.data.saved_img).length;
+        imageTotal += Object.keys(child.data.saved_img).length;
+
+        if(cluster_imageTotal>0 ? $('#' + cluster_key + 'imageTotal').text(cluster_imageTotal + " images") :  $('#' + cluster_key + 'imageTotal').text(cluster_imageTotal + " image") );
+
+        if(imageTotal>1 ? $('#imageTotal').text(imageTotal + " images ") :  $('#imageTotal').text(imageTotal + " image ") );
+
+        append_images_to_term(child, unique_tree_path);
+
+      }
+
+      // Took out cluster_key
+      append_images_to_term = function (child, node_tree_path) {
+        save_img_dict_ex = child.data.saved_img;
+
+        let countImage = 0;
+        let asciiCode = 97;
+      
+        for (k in child.data.saved_img) {
+
+          let googleSearch = "https://www.google.com/search?q="+child.data.saved_img[k].google_search_term+"&source=lnms&tbm=isch&sa";
+          if(countImage<26){
+            $('#' + node_tree_path + 'image_row').append($('<div class = "imgSearchTermGroup"> <a  title="perform google search" target="_blank" href="'+googleSearch+'"> <img alt="" class="node_img" src=' + k + '> </a> <div class="imageDescription"> <h6>(' + String.fromCharCode(countImage + asciiCode)  + ')</h6> <h6 class="searchTerm">' + child.data.saved_img[k].google_search_term + '</h6> <h6></h6> </div> </div>'))
+          }
+          else{
+            $('#' + node_tree_path + 'image_row').append($('<div class = "imgSearchTermGroup"> <a  title="perform google search" target="_blank" href="'+googleSearch+'"> <img alt="" class="node_img" src=' + k + '> </a> <div class="imageDescription"> <h6>(' + (countImage - 25)  + ')</h6> <h6 class="searchTerm">' + child.data.saved_img[k].google_search_term + '</h6> <h6></h6> </div> </div>'))
+          }
+          countImage++;
+
+        }
+      }
+
+      count_cluster_total = function (clusters_obj) {
+        for (let i = 0; i < clusters_obj.length; i++) {
+          let bool = $('#' + clusters_obj[i].key).css('display') == 'none'
+          if(!bool){
+            clusterTotal++;
+          }
+        }
+        
+        if(clusterTotal>0 ? $('#clusterTotal').text(clusterTotal + " clusters, ") :  $('#clusterTotal').text(clusterTotal + " cluster, ") );
+      }
+
+      function isObjEmpty(obj) {
+        for (var key in obj) {
+          if (obj.hasOwnProperty(key))
+            return false;
+        }
+        return true;
+      }
+
+    };
+
+  </script>
+
+  {% endblock %}
